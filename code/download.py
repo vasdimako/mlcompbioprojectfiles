@@ -28,6 +28,7 @@ data_df["UID"] = data_df["donor_name"].apply(lambda x: x.split(".")[2]) + "_" + 
 bam_urls = []
 bai_urls = []
 
+#FWM, PCx, TCx or HIP, change to dataset to be downloaded
 for ind, row in data_df.iterrows():
     if row["structure_acronym"] == "FWM":
         bam_urls.append(["D:/ML/data/FWM/" + row["UID"] + ".sorted.bam", "http://aging.brain-map.org" + row["anonymized_bam_file_link"]])

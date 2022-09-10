@@ -1,0 +1,152 @@
+
+Run to create counts matrix.
+
+```{r}
+region = "HIP" # values: ["FWM", "HIP", "PCx", "TCx"]
+grp = "FULL"  # values: ["AD", "FULL"]
+setwd(paste("D:/ML/data/", region, "/", sep=""))
+files = list.files(pattern = "\\.bam$")
+counts = featureCounts(files, annot.ext="GCF_000001405.40_GRCh38.p14_genomic.gtf", isGTFAnnotationFile = TRUE, allowMultiOverlap=TRUE, useMetaFeatures=TRUE, nthreads="12", isPairedEnd=TRUE, strandSpecific = "0", countMultiMappingReads = TRUE)
+```
+
+```{r}
+counts_edit = x=data.frame(counts$annotation[,c("GeneID","Length")],
+    counts$counts,
+    stringsAsFactors=FALSE)
+save(counts_edit, file=paste(region, "_Counts.RData", sep=""))
+```
+
+Load in data and perform cleaning.
+
+```{r}
+
+assign('counts_matrix', get(load(paste(region, "_Counts.RData", sep=""))))
+
+if("GeneID" %in% colnames(counts_matrix)) {
+  counts_matrix = subset(counts_matrix, select = -c(GeneID, Length))
+}
+counts_matrix = t(counts_matrix)
+counts_matrix = counts_matrix[,colSums(counts_matrix) != 0]
+counts_matrix = t(counts_matrix)
+
+cpm_log = cpm(counts_matrix, log=TRUE)
+median_log_cpm = apply(cpm_log, 1, median)
+expr_cutoff = -1
+sum(median_log_cpm > expr_cutoff)
+counts_matrix = counts_matrix[median_log_cpm > expr_cutoff,]
+```
+
+For AD only runs, filter for the appropriate samples contained in ADcsv.
+
+```{r}
+if(grp=="AD"){
+  setwd("G:/My Drive/biostat/02_mlcompbio/project/ADcsv")
+  
+  sample_filter = read.csv(paste(region, "_AD.csv", sep=""))
+  a = sample_filter$donor_name
+  b = lapply(a, function(x) strsplit(x, ".", fixed=TRUE)[[1]][[3]])
+  c = sample_filter$structure_acronym
+  d = as.character(sample_filter$rna_well)
+  e = do.call(rbind.data.frame, b)
+  e$structure = c
+  e$rna = d
+  f = apply(e,1,paste,collapse="_")
+  f = paste0(f, ".sorted.bam")
+  if(startsWith(colnames(counts_matrix)[1], "X")) {
+    f = paste0("X", f)
+  }
+  counts_matrix = counts_matrix[, f]
+}
+```
+
+Match treatments vector to group/region combination.
+
+```{r}
+get_treatments <- function(region, grp) {
+  
+  if(region=="FWM" && grp=="AD") {
+    treat = c(3,2,2,2,3,2,3,3,2,3,2,2,2,2,3,2,3,3,2,3,2,3,2,3,3,2,2,2,3,2,2,2,2,3,3,2,3,2,2,3,2,3,3,2,3,2)
+  } 
+  else if (region=="FWM" && grp=="FULL") {
+    treat = c(3,0,2,2,1,0,1,0,1,2,3,2,3,0,3,2,1,0,3,2,0,2,2,1,2,1,0,3,2,3,0,0,1,3,2,1,0,3,2,3,2,3,0,1,0,3,2,1,2,1,2,1,0,0,1,0,3,2,1,2,1,2,1,2,3,3,2,3,0,1,0,1,0,1,2,1,0,1,2,3,2,3,0,1,0,3,2,3,2)
+  
+  } 
+  else if (region=="HIP" && grp=="AD") {
+  treat = c(3,3,2,2,2,3,3,3,2,3,2,3,2,2,2,3,2,3,3,2,3,2,3,2,3,3,2,2,2,3,3,2,2,2,2,2,2,3,2,3,2,2,3,2,3,2,3,2,2)
+  }
+  else if (region=="HIP" && grp=="FULL") {
+  treat = c(3,0,3,2,1,2,1,0,1,0,0,2,3,3,0,3,2,3,2,1,0,3,2,1,2,1,2,1,0,3,2,3,0,0,3,2,1,0,3,2,3,2,3,0,1,0,3,2,1,2,1,2,1,0,3,0,1,0,3,2,1,2,2,1,2,2,2,3,0,1,2,3,0,1,0,1,2,1,0,1,2,3,2,1,0,3,2,3,2,2,1,2,1,0)
+  }
+  else if (region=="TCx" && grp=="AD") {
+  treat = c(3,3,2,2,3,2,3,2,3,3,2,3,2,2,2,2,3,2,3,3,2,3,2,3,2,3,3,2,2,2,3,2,2,2,2,2,3,2,3,3,2,3,2,3,3,2,3,2,2,2)
+  }
+  else if (region=="TCx" && grp=="FULL") {
+  treat = c(3,0,3,2,2,1,0,1,0,3,0,1,2,3,2,3,0,3,2,1,0,3,2,1,0,2,1,2,1,2,1,0,3,2,3,0,1,0,3,2,1,0,3,2,3,2,3,0,1,0,3,2,1,2,1,2,1,0,0,1,0,3,2,1,2,1,2,1,2,2,3,2,3,0,1,3,0,1,0,1,1,0,1,2,3,2,3,0,1,0,3,2,3,2,2,1,2,1,0)
+  }
+  else if (region=="PCx" && grp=="AD") {
+  treat = c(3,2,2,2,3,2,3,3,2,3,2,2,2,2,3,2,3,3,2,2,3,2,3,3,2,2,2,3,2,2,2,2,3,3,2,3,2,2,3,2,3,3,2,3,2,2)
+  }
+  else if (region=="PCx" && grp=="FULL") {
+  treat = c(3,0,2,2,1,1,0,1,2,3,2,3,0,3,2,1,0,3,2,0,2,2,1,2,1,0,3,2,3,0,0,1,3,2,1,0,2,3,2,3,0,1,0,3,2,1,2,1,2,1,0,0,1,0,3,2,1,2,1,2,1,2,3,3,2,3,0,1,0,1,0,1,2,1,0,1,2,3,2,3,0,1,0,3,2,3,2,1,2,1,0)
+  }
+  return(treat)
+}
+```
+
+Run data normalization step.
+
+```{r}
+treat = get_treatments(region, grp)
+IDs = rownames(counts_matrix)
+
+mydata = RNASeq.Data(counts_matrix, Normalizer = NULL, Treatment=treat, GeneID=IDs)
+```
+
+Generate elbow plot.
+
+```{r}
+set.seed(123)
+k.max <- 15
+data <- mydata$logFC
+wss <- sapply(1:k.max, 
+              function(k){kmeans(data, k, nstart=50,iter.max = 50, algorithm="MacQueen")$tot.withinss})
+wss
+plot(1:k.max, wss,
+     type="b", pch = 19, frame = FALSE, 
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+```
+
+EM clustering for range of values of k and corresponding BIC.
+
+```{r}
+d_clust <- Mclust(as.matrix(data), G=2:6, 
+                  modelNames = mclust.options("emModelNames"))
+d_clust$BIC
+```
+
+Run k-means to obtain cluster center estimates.
+
+```{r}
+c0=KmeansPlus.RNASeq(mydata,nK=6)
+c0$centers
+```
+
+Fit model to the normalized data starting from estimates from above.
+
+```{r}
+cls=Cluster.RNASeq(data=mydata,model="nbinom",centers=c0$centers,method="EM")
+cls$centers
+```
+
+Take the minimum L2 norm, order data in reverse probability of being in that cluster, save in .csv file.
+
+```{r}
+L2 = apply(cls$centers, MARGIN=1, norm, type="2")
+which.min(L2)
+geneprobs = cls$probability #argmin the above
+generank = data.frame(mydata$GeneID, geneprobs, cls$cluster, mydata$logFC)
+colname = paste("X", which.min(L2), sep="")
+ordered = generank[order(generank[, colname]), ]
+write.csv(ordered, paste(region, "_ordered_", grp, ".csv", sep=""), row.names = FALSE)
+```
